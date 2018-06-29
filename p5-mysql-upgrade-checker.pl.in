@@ -30,28 +30,53 @@ use utf8;
 
 use DBI;
 use Test::More;
-use Data::Dumper;
+use Ytkit::Config;
 
 use constant DST_VERSION => 80000;
 
-my $print_only= 1;
-#===== FIXME
-my $database= "";
-my $host    = "localhost";
-my $port    = 64057;
-my $socket  = "/usr/mysql/5.7.22/data/mysql.sock";
-my $user    = "root";
-my $password= "";
-#=====
+my $option=
+{
+  database => { alias => ["database", "d"], default => "" },
+  host     => { alias => ["host", "h"], default => "localhost" },
+  port     => { alias => ["port", "P"], default => 3306 },
+  socket   => { alias => ["socket", "S"], default => "" },
+  user     => { alias => ["user", "u"], default => "root" },
+  password => { alias => ["password", "p"] },
+  execute  => { default => 0, isa => "noarg" },
+};
+
+my ($opt, @argv)= Ytkit::Config::options($option, @ARGV);
 
 my $dsn;
-$dsn  = sprintf("dbi:mysql:%s", $database ? $database : "");
-$dsn .= sprintf(";host=%s", $host) if $host;
-$dsn .= sprintf(";port=%d", $port) if $port;
-$dsn .= sprintf(";mysql_socket=%s", $socket) if $socket;
-my $conn= DBI->connect($dsn, $user, $password, {PrintError => 1, RaiseError => 1, mysql_use_utf8 => 1}) or die;
+$dsn  = sprintf("dbi:mysql:%s", $opt->{database} ? $opt->{database} : "");
+$dsn .= sprintf(";host=%s", $opt->{host}) if $opt->{host};
+$dsn .= sprintf(";port=%d", $opt->{port}) if $opt->{port};
+$dsn .= sprintf(";mysql_socket=%s", $opt->{socket}) if $opt->{socket};
+my $conn= DBI->connect($dsn, $opt->{user}, $opt->{password},
+                       {PrintError => 1, RaiseError => 1, mysql_use_utf8 => 1}) or die;
  
-if ($print_only)
+if ($opt->{execute})
+{
+  my $src_version= get_version_string();
+  return "5.7 to 8.0 only"
+    if $src_version < 50700 || $src_version >= 80000 || DST_VERSION < 80000 || DST_VERSION >= 80100;
+  
+  ok(get_reserved_keywords_check(),
+     "Usage of db objects with names conflicting with reserved keywords in 8.0");
+  ok(get_utf8mb3_check(), "Usage of utf8mb3 charset");
+  ok(get_zerofill_check(), "Usage of use ZEROFILL/display length type attributes");
+  ok(Check_table_command(), "Issues reported by 'check table x for upgrade' command");
+  ok(get_mysql_schema_check(), "Table names in the mysql schema conflicting with new tables in 8.0");
+  ok(get_old_temporal_check(), "Usage of old temporal type");
+  ok(get_foreign_key_length_check(), "Foreign key constraint names longer than 64 characters");
+  ok(get_maxdb_sql_mode_flags_check(), "usage of obsolete MAXDB sql_mode flag");
+  ok(get_obsolete_sql_mode_flags_check(), "get_obsolete_sql_mode_flags_check");
+  ok(get_partitioned_tables_in_shared_tablespaces_check(), "Usage of partitioned tables in shared tablespaces");
+  ok(get_removed_functions_check(), "get_removed_functions_check");
+  
+  done_testing;
+}
+else
 {
   printf("get_removed_functions_check\n================\n");
   printf("%s;\n\n", join(";\n", _get_removed_functions_check_sql()));
@@ -90,28 +115,11 @@ if ($print_only)
 
   printf("Check_table_command\n================\n");
   printf("%s;\n\n", join(";\n", _Check_table_command_sql()));
+
+  printf("Please add --execute argument if you want to execute statements.\n");
 }
-else
-{
-  my $src_version= get_version_string();
-  return "5.7 to 8.0 only"
-    if $src_version < 50700 || $src_version >= 80000 || DST_VERSION < 80000 || DST_VERSION >= 80100;
-  
-  ok(get_reserved_keywords_check(),
-     "Usage of db objects with names conflicting with reserved keywords in 8.0");
-  ok(get_utf8mb3_check(), "Usage of utf8mb3 charset");
-  ok(get_zerofill_check(), "Usage of use ZEROFILL/display length type attributes");
-  ok(Check_table_command(), "Issues reported by 'check table x for upgrade' command");
-  ok(get_mysql_schema_check(), "Table names in the mysql schema conflicting with new tables in 8.0");
-  ok(get_old_temporal_check(), "Usage of old temporal type");
-  ok(get_foreign_key_length_check(), "Foreign key constraint names longer than 64 characters");
-  ok(get_maxdb_sql_mode_flags_check(), "usage of obsolete MAXDB sql_mode flag");
-  ok(get_obsolete_sql_mode_flags_check(), "get_obsolete_sql_mode_flags_check");
-  ok(get_partitioned_tables_in_shared_tablespaces_check(), "Usage of partitioned tables in shared tablespaces");
-  ok(get_removed_functions_check(), "get_removed_functions_check");
-  
-  done_testing;
-}
+
+exit 0;
 
 
 
