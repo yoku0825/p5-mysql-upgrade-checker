@@ -1,0 +1,817 @@
+#!/usr/bin/perl
+
+### 
+###  Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+###  Copyright (c) 2018, yoku0825. All rights reserved.
+### 
+###  This program is free software; you can redistribute it and/or modify
+###  it under the terms of the GNU General Public License, version 2.0,
+###  as published by the Free Software Foundation.
+### 
+###  This program is also distributed with certain software (including
+###  but not limited to OpenSSL) that is licensed under separate terms, as
+###  designated in a particular file or component or in included license
+###  documentation.  The authors of MySQL hereby grant you an additional
+###  permission to link the program and your derivative works with the
+###  separately licensed software that they have included with MySQL.
+###  This program is distributed in the hope that it will be useful,  but
+###  WITHOUT ANY WARRANTY; without even the implied warranty of
+###  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+###  the GNU General Public License, version 2.0, for more details.
+### 
+###  You should have received a copy of the GNU General Public License
+###  along with this program; if not, write to the Free Software Foundation, Inc.,
+###  51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
+### 
+
+use strict;
+use warnings;
+use utf8;
+
+use DBI;
+use Test::More;
+use Data::Dumper;
+
+use constant DST_VERSION => 80000;
+
+my $print_only= 1;
+#===== FIXME
+my $database= "";
+my $host    = "localhost";
+my $port    = 64057;
+my $socket  = "/usr/mysql/5.7.22/data/mysql.sock";
+my $user    = "root";
+my $password= "";
+#=====
+
+my $dsn;
+$dsn  = sprintf("dbi:mysql:%s", $database ? $database : "");
+$dsn .= sprintf(";host=%s", $host) if $host;
+$dsn .= sprintf(";port=%d", $port) if $port;
+$dsn .= sprintf(";mysql_socket=%s", $socket) if $socket;
+my $conn= DBI->connect($dsn, $user, $password, {PrintError => 1, RaiseError => 1, mysql_use_utf8 => 1}) or die;
+ 
+if ($print_only)
+{
+  printf("get_removed_functions_check\n================\n");
+  printf("%s;\n\n", join(";\n", _get_removed_functions_check_sql()));
+
+  printf("get_partitioned_tables_in_shared_tablespaces_check\n================\n");
+  printf("%s;\n\n", join(";\n", _get_partitioned_tables_in_shared_tablespaces_check_sql()));
+
+  printf("obsolete_sql_mode_flags_check\n================\n");
+  printf("%s;\n\n", join(";\n", _get_obsolete_sql_mode_flags_check_sql()));
+
+  printf("get_maxdb_sql_mode_flags_check\n================\n");
+  printf("%s;\n\n", join(";\n", _get_maxdb_sql_mode_flags_check_sql()));
+
+  printf("get_maxdb_sql_mode_flags_check\n================\n");
+  printf("%s;\n\n", join(";\n", _get_maxdb_sql_mode_flags_check_sql()));
+
+  printf("get_foreign_key_length_check\n================\n");
+  printf("%s;\n\n", join(";\n", _get_foreign_key_length_check_sql()));
+
+  printf("get_old_temporal_check\n================\n");
+  printf("SET show_old_temporals = ON;\n");
+  printf("%s;\n", join(";\n", _get_old_temporal_check_sql()));
+  printf("SET show_old_temporals = OFF;\n\n");
+
+  printf("get_mysql_schema_check\n================\n");
+  printf("%s;\n\n", join(";\n", _get_mysql_schema_check_sql()));
+
+  printf("get_reserved_keywords_check\n================\n");
+  printf("%s;\n\n", join(";\n", _get_reserved_keywords_check_sql()));
+
+  printf("get_utf8mb3_check\n================\n");
+  printf("%s;\n\n", join(";\n", _get_utf8mb3_check_sql()));
+
+  printf("get_zerofill_check\n================\n");
+  printf("%s;\n\n", join(";\n", _get_zerofill_check_sql()));
+
+  printf("Check_table_command\n================\n");
+  printf("%s;\n\n", join(";\n", _Check_table_command_sql()));
+}
+else
+{
+  my $src_version= get_version_string();
+  return "5.7 to 8.0 only"
+    if $src_version < 50700 || $src_version >= 80000 || DST_VERSION < 80000 || DST_VERSION >= 80100;
+  
+  ok(get_reserved_keywords_check(),
+     "Usage of db objects with names conflicting with reserved keywords in 8.0");
+  ok(get_utf8mb3_check(), "Usage of utf8mb3 charset");
+  ok(get_zerofill_check(), "Usage of use ZEROFILL/display length type attributes");
+  ok(Check_table_command(), "Issues reported by 'check table x for upgrade' command");
+  ok(get_mysql_schema_check(), "Table names in the mysql schema conflicting with new tables in 8.0");
+  ok(get_old_temporal_check(), "Usage of old temporal type");
+  ok(get_foreign_key_length_check(), "Foreign key constraint names longer than 64 characters");
+  ok(get_maxdb_sql_mode_flags_check(), "usage of obsolete MAXDB sql_mode flag");
+  ok(get_obsolete_sql_mode_flags_check(), "get_obsolete_sql_mode_flags_check");
+  ok(get_partitioned_tables_in_shared_tablespaces_check(), "Usage of partitioned tables in shared tablespaces");
+  ok(get_removed_functions_check(), "get_removed_functions_check");
+  
+  done_testing;
+}
+
+
+
+sub get_reserved_keywords_check
+{
+  return run_with_sql_list(_get_reserved_keywords_check_sql());
+}
+
+sub get_utf8mb3_check
+{
+  return run_with_sql_list(_get_utf8mb3_check_sql());
+}
+
+sub get_zerofill_check
+{
+  return run_with_sql_list(_get_zerofill_check_sql());
+}
+
+sub Check_table_command
+{
+  my $rc= 1;
+  foreach my $sql (_Check_table_command_sql())
+  {
+    my $ret= $conn->selectall_arrayref($sql, {Slice => {}});
+
+    if ($ret && $ret->[0]->{Msg_text} ne "OK")
+    {
+      print_table($ret);
+      $rc= 0;
+    }
+  }
+
+  return $rc;
+}
+
+sub get_mysql_schema_check
+{
+  return run_with_sql_list(_get_mysql_schema_check_sql());
+}
+
+sub get_old_temporal_check
+{
+  $conn->do("SET show_old_temporals = ON");
+  my $ret= run_with_sql_list(_get_old_temporal_check_sql());
+  $conn->do("SET show_old_temporals = OFF");
+
+  return $ret;
+}
+
+sub get_foreign_key_length_check
+{
+  return run_with_sql_list(_get_foreign_key_length_check_sql());
+}
+
+sub get_maxdb_sql_mode_flags_check
+{
+  return run_with_sql_list(_get_maxdb_sql_mode_flags_check_sql());
+}
+
+sub get_obsolete_sql_mode_flags_check
+{
+  return run_with_sql_list(_get_obsolete_sql_mode_flags_check_sql());
+}
+
+sub get_partitioned_tables_in_shared_tablespaces_check
+{
+  return run_with_sql_list(_get_partitioned_tables_in_shared_tablespaces_check_sql());
+}
+
+sub get_removed_functions_check
+{
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L387-L458
+  my $functions= { "ENCODE" => "AES_ENCRYPT and AES_DECRYPT",
+                   "DECODE" => "AES_ENCRYPT and AES_DECRYPT",
+                   "ENCRYPT" => "SHA2",
+                   "DES_ENCRYPT" => "AES_ENCRYPT and AES_DECRYPT",
+                   "DES_DECRYPT" => "AES_ENCRYPT and AES_DECRYPT",
+                   "AREA" => "ST_AREA",
+                   "ASBINARY" => "ST_ASBINARY",
+                   "ASTEXT" => "ST_ASTEXT",
+                   "ASWKB" => "ST_ASWKB",
+                   "ASWKT" => "ST_ASWKT",
+                   "BUFFER" => "ST_BUFFER",
+                   "CENTROID" => "ST_CENTROID",
+                   "CONTAINS" => "MBRCONTAINS",
+                   "CROSSES" => "ST_CROSSES",
+                   "DIMENSION" => "ST_DIMENSION",
+                   "DISJOINT" => "MBRDISJOINT",
+                   "DISTANCE" => "ST_DISTANCE",
+                   "ENDPOINT" => "ST_ENDPOINT",
+                   "ENVELOPE" => "ST_ENVELOPE",
+                   "EQUALS" => "MBREQUALS",
+                   "EXTERIORRING" => "ST_EXTERIORRING",
+                   "GEOMCOLLFROMTEXT" => "ST_GEOMCOLLFROMTEXT",
+                   "GEOMCOLLFROMWKB" => "ST_GEOMCOLLFROMWKB",
+                   "GEOMETRYCOLLECTIONFROMTEXT" => "ST_GEOMETRYCOLLECTIONFROMTEXT",
+                   "GEOMETRYCOLLECTIONFROMWKB" => "ST_GEOMETRYCOLLECTIONFROMWKB",
+                   "GEOMETRYFROMTEXT" => "ST_GEOMETRYFROMTEXT",
+                   "GEOMETRYFROMWKB" => "ST_GEOMETRYFROMWKB",
+                   "GEOMETRYN" => "ST_GEOMETRYN",
+                   "GEOMETRYTYPE" => "ST_GEOMETRYTYPE",
+                   "GEOMFROMTEXT" => "ST_GEOMFROMTEXT",
+                   "GEOMFROMWKB" => "ST_GEOMFROMWKB",
+                   "GLENGTH" => "ST_LENGTH",
+                   "INTERIORRINGN" => "ST_INTERIORRINGN",
+                   "INTERSECTS" => "MBRINTERSECTS",
+                   "ISCLOSED" => "ST_ISCLOSED",
+                   "ISEMPTY" => "ST_ISEMPTY",
+                   "ISSIMPLE" => "ST_ISSIMPLE",
+                   "LINEFROMTEXT" => "ST_LINEFROMTEXT",
+                   "LINEFROMWKB" => "ST_LINEFROMWKB",
+                   "LINESTRINGFROMTEXT" => "ST_LINESTRINGFROMTEXT",
+                   "LINESTRINGFROMWKB" => "ST_LINESTRINGFROMWKB",
+                   "MBREQUAL" => "MBREQUALS",
+                   "MLINEFROMTEXT" => "ST_MLINEFROMTEXT",
+                   "MLINEFROMWKB" => "ST_MLINEFROMWKB",
+                   "MPOINTFROMTEXT" => "ST_MPOINTFROMTEXT",
+                   "MPOINTFROMWKB" => "ST_MPOINTFROMWKB",
+                   "MPOLYFROMTEXT" => "ST_MPOLYFROMTEXT",
+                   "MPOLYFROMWKB" => "ST_MPOLYFROMWKB",
+                   "MULTILINESTRINGFROMTEXT" => "ST_MULTILINESTRINGFROMTEXT",
+                   "MULTILINESTRINGFROMWKB" => "ST_MULTILINESTRINGFROMWKB",
+                   "MULTIPOINTFROMTEXT" => "ST_MULTIPOINTFROMTEXT",
+                   "MULTIPOINTFROMWKB" => "ST_MULTIPOINTFROMWKB",
+                   "MULTIPOLYGONFROMTEXT" => "ST_MULTIPOLYGONFROMTEXT",
+                   "MULTIPOLYGONFROMWKB" => "ST_MULTIPOLYGONFROMWKB",
+                   "NUMGEOMETRIES" => "ST_NUMGEOMETRIES",
+                   "NUMINTERIORRINGS" => "ST_NUMINTERIORRINGS",
+                   "NUMPOINTS" => "ST_NUMPOINTS",
+                   "OVERLAPS" => "MBROVERLAPS",
+                   "POINTFROMTEXT" => "ST_POINTFROMTEXT",
+                   "POINTFROMWKB" => "ST_POINTFROMWKB",
+                   "POINTN" => "ST_POINTN",
+                   "POLYFROMTEXT" => "ST_POLYFROMTEXT",
+                   "POLYFROMWKB" => "ST_POLYFROMWKB",
+                   "POLYGONFROMTEXT" => "ST_POLYGONFROMTEXT",
+                   "POLYGONFROMWKB" => "ST_POLYGONFROMWKB",
+                   "SRID" => "ST_SRID",
+                   "STARTPOINT" => "ST_STARTPOINT",
+                   "TOUCHES" => "ST_TOUCHES",
+                   "WITHIN" => "MBRWITHIN",
+                   "X" => "ST_X",
+                   "Y" => "ST_Y" };
+
+  my $rc= 1;
+  foreach my $sql (_get_removed_functions_check_sql())
+  {
+    foreach my $row (@{$conn->selectall_arrayref($sql)})
+    {
+      ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L551-L564
+
+      foreach (keys(%$functions))
+      {
+        if ($row->[4] =~ /\s$_[\s\(]/)
+        {
+          $rc= 0;
+          printf("%s.%s(%s) uses removed function %s (consider using %s instead)\n",
+                 $row->[0], $row->[1], $row->[2], $_, $functions->{$_});
+        }
+      }
+    }
+  }
+
+  return $rc;
+}
+
+
+sub _get_removed_functions_check_sql
+{
+  my @sql_list;
+  my $sql;
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L464-L465
+  $sql= << "EOS";
+SELECT
+  routine_schema,
+  routine_name,
+  '',
+  routine_type,
+  UPPER(routine_definition)
+FROM
+  information_schema.routines
+EOS
+  push(@sql_list, $sql);
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L466-L468
+  $sql= << "EOS";
+SELECT
+  table_schema,
+  table_name,
+  column_name,
+  'COLUMN',
+  UPPER(generation_expression)
+FROM
+  information_schema.columns
+WHERE
+  extra REGEXP 'generated'
+EOS
+  push(@sql_list, $sql);
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L469-L470
+  $sql= << "EOS";
+SELECT
+  trigger_schema,
+  trigger_name,
+  '',
+  'TRIGGER',
+  UPPER(action_statement)
+FROM
+  information_schema.triggers
+EOS
+  push(@sql_list, $sql);
+
+  return @sql_list;
+}
+
+
+sub _get_partitioned_tables_in_shared_tablespaces_check_sql
+{
+  my @sql_list;
+  my $sql;
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L372-L376
+  $sql= << "EOS";
+SELECT
+  table_schema,
+  table_name,
+  CONCAT('Partition ', partition_name, ' is in shared tablespace ', tablespace_name) AS description
+FROM
+  information_schema.partitions
+WHERE
+  partition_name IS NOT NULL AND
+  (tablespace_name IS NOT NULL AND 
+   tablespace_name != 'innodb_file_per_table')
+EOS
+  push(@sql_list, $sql);
+
+  ### Trim extra space and LF
+  return map { s/\s+/ /g; return $_; } @sql_list;
+}
+
+sub _get_obsolete_sql_mode_flags_check_sql
+{
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L334-L342
+  my @modes= qw{DB2 MSSQL MYSQL323 MYSQL40 NO_FIELD_OPTIONS 
+                NO_KEY_OPTIONS NO_TABLE_OPTIONS ORACLE POSTGRESQL};
+
+  my @sql_list;
+  my $sql;
+
+  foreach my $sql_mode (@modes)
+  {
+    ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L346-L348
+    $sql= << "EOS";
+SELECT
+  routine_schema,
+  routine_name,
+  CONCAT(routine_type, ' uses obsolete $sql_mode sql_mode')
+FROM
+  information_schema.routines
+WHERE
+  FIND_IN_SET('$sql_mode', sql_mode)
+EOS
+    push(@sql_list, $sql);
+
+    ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L351-L352
+    $sql= << "EOS";
+SELECT
+  event_schema,
+  event_name,
+  'EVENT uses obsolete $sql_mode sql_mode'
+FROM
+  information_schema.events
+WHERE
+  FIND_IN_SET('$sql_mode', sql_mode)
+EOS
+    push(@sql_list, $sql);
+
+    ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L355-L357
+    $sql= << "EOS";
+SELECT
+  trigger_schema,
+  trigger_name,
+  'TRIGGER uses obsolete $sql_mode sql_mode'
+FROM
+  information_schema.triggers
+WHERE
+  FIND_IN_SET('$sql_mode', sql_mode)
+EOS
+    push(@sql_list, $sql);
+  }
+
+  ### Trim extra space and LF
+  return map { s/\s+/ /g; return $_; } @sql_list;
+}
+
+sub _get_maxdb_sql_mode_flags_check_sql
+{
+  my @sql_list;
+  my $sql;
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L314-L316
+  $sql= << "EOS";
+SELECT
+  routine_schema,
+  routine_name,
+  CONCAT(routine_type, ' uses obsolete MAXDB sql_mode')
+FROM
+  information_schema.routines
+WHERE
+  FIND_IN_SET('MAXDB', sql_mode)
+EOS
+  push(@sql_list, $sql);
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L317-L318
+  $sql= << "EOS";
+SELECT
+  event_schema,
+  event_name,
+  'EVENT uses obsolete MAXDB sql_mode'
+FROM
+  information_schema.events
+WHERE
+  FIND_IN_SET('MAXDB', sql_mode)
+EOS
+  push(@sql_list, $sql);
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L319-L321
+  $sql= << "EOS";
+SELECT
+  trigger_schema,
+  trigger_name,
+  'TRIGGER uses obsolete MAXDB sql_mode'
+FROM
+  information_schema.triggers
+WHERE
+  FIND_IN_SET('MAXDB', sql_mode)
+EOS
+  push(@sql_list, $sql);
+
+  ### Trim extra space and LF
+  return map { s/\s+/ /g; return $_; } @sql_list;
+}
+
+sub _get_foreign_key_length_check_sql
+{
+  my @sql_list;
+  my $sql;
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L299-L304
+  $sql= << "EOS";
+SELECT
+  table_schema,
+  table_name,
+  'Foreign key longer than 64 characters' AS description
+FROM
+  information_schema.tables
+WHERE
+  table_name IN (SELECT LEFT(SUBSTR(id, INSTR(id, '/') + 1),
+                             INSTR(SUBSTR(id, INSTR(id, '/') + 1), '_ibfk_') -1 )
+                 FROM information_schema.innodb_sys_foreign
+                 WHERE LENGTH(SUBSTR(id, INSTR(id, '/') + 1)) > 64)
+EOS
+  push(@sql_list, $sql);
+
+  ### Trim extra space and LF
+  return map { s/\s+/ /g; return $_; } @sql_list;
+}
+
+sub _get_old_temporal_check_sql
+{
+  my @sql_list;
+  my $sql;
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L154-L156
+  $sql= << "EOS";
+SELECT
+  table_schema,
+  table_name,
+  column_name,
+  column_type
+FROM
+  information_schema.columns
+WHERE
+  column_type LIKE 'timestamp /* 5.5 binary format */'
+EOS
+  push(@sql_list, $sql);
+
+  ### Trim extra space and LF
+  return map { s/\s+/ /g; return $_; } @sql_list;
+}
+
+
+sub _get_mysql_schema_check_sql
+{
+  my @sql_list;
+  my $sql;
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L217-L225
+  $sql= << "EOS";
+SELECT
+  TABLE_SCHEMA,
+  TABLE_NAME,
+  'Table name used in mysql schema in 8.0' AS WARNING
+FROM
+  information_schema.tables
+WHERE
+  LOWER(table_schema) = 'mysql' AND
+  LOWER(table_name) IN ('catalogs', 'character_sets', 'collations', 'column_type_elements', 
+                        'columns', 'dd_properties', 'events', 'foreign_key_column_usage',
+                        'foreign_keys', 'index_column_usage', 'index_partitions', 
+                        'index_stats', 'indexes', 'parameter_type_elements', 'parameters',
+                        'routines', 'schemata', 'st_spatial_reference_systems', 
+                        'table_partition_values', 'table_partitions', 'table_stats', 
+                        'tables', 'tablespace_files', 'tablespaces', 'triggers', 
+                        'view_routine_usage', 'view_table_usage', 'component', 
+                        'default_roles', 'global_grants', 'innodb_ddl_log', 
+                        'innodb_dynamic_metadata', 'password_history', 'role_edges')
+EOS
+  push(@sql_list, $sql);
+
+  ### Trim extra space and LF
+  return map { s/\s+/ /g; return $_; } @sql_list;
+}
+
+sub _get_reserved_keywords_check_sql
+{
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L167-L174
+  my $keywords= "('ADMIN', 'CUBE', 'CUME_DIST', 
+                  'DENSE_RANK', 'EMPTY', 'EXCEPT', 'FIRST_VALUE', 'FUNCTION',
+                  'GROUPING', 'GROUPS', 'JSON_TABLE', 'LAG', 'LAST_VALUE',
+                  'LEAD', 'NTH_VALUE', 'NTILE', 'OF',
+                  'OVER', 'PERCENT_RANK', 'PERSIST', 'PERSIST_ONLY',
+                  'RANK', 'RECURSIVE', 'ROW', 'ROWS',
+                  'ROW_NUMBER', 'SYSTEM', 'WINDOW')";
+
+  my @sql_list;
+  my $sql;
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L167-L174
+  $sql= << "EOS";
+SELECT 
+  schema_name,
+  'Schema name' AS WARNING
+FROM
+  information_schema.schemata
+WHERE
+  schema_name IN $keywords
+EOS
+  push(@sql_list, $sql);
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L181-L185
+  $sql= << "EOS";
+SELECT
+  TABLE_SCHEMA,
+  TABLE_NAME,
+  'Table name' AS WARNING
+FROM
+  information_schema.tables
+WHERE
+  TABLE_TYPE != 'VIEW' AND
+  TABLE_NAME IN $keywords
+EOS
+  push(@sql_list, $sql);
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L186-L192
+  $sql= << "EOS";
+SELECT
+  table_schema,
+  table_name,
+  column_name,
+  column_type,
+  'Column name' AS WARNING
+FROM
+  information_schema.columns
+WHERE
+ table_schema NOT IN ('information_schema', 'performance_schema') AND
+ column_type IN  $keywords
+EOS
+  push(@sql_list, $sql);
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L193-L196
+  $sql= << "EOS";
+SELECT
+  trigger_schema,
+  trigger_name,
+  'Trigger name' AS WARNING
+FROM 
+  information_schema.triggers
+WHERE
+  trigger_name IN $keywords
+EOS
+  push(@sql_list, $sql);
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L197-L199
+  $sql= << "EOS";
+SELECT
+  table_schema,
+  table_name,
+  'View name' AS WARNING
+FROM 
+  information_schema.views
+WHERE
+  table_name IN $keywords
+EOS
+  push(@sql_list, $sql);
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L200-L203
+  $sql= << "EOS";
+SELECT
+  routine_schema,
+  routine_name,
+  'Routine name' AS WARNING
+FROM
+  information_schema.routines
+WHERE
+  routine_name IN $keywords
+EOS
+  push(@sql_list, $sql);
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L204-L206
+  $sql= << "EOS";
+SELECT
+  event_schema,
+  event_name,
+  'Event name' AS WARNING
+FROM
+  information_schema.events
+WHERE
+  event_name IN $keywords
+EOS
+  push(@sql_list, $sql);
+
+  ### Trim extra space and LF
+  return map { s/\s+/ /g; return $_; } @sql_list;
+}
+
+sub _get_utf8mb3_check_sql
+{
+  my @sql_list;
+  
+  my $sql;
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L217-L220
+  $sql= << "EOS";
+SELECT
+  schema_name,
+  CONCAT("schema's default character set: ", default_character_set_name)
+FROM
+  information_schema.schemata
+WHERE 
+ schema_name NOT IN ('information_schema', 'performance_schema', 'sys') AND
+ default_character_set_name IN ('utf8', 'utf8mb3')
+EOS
+  push(@sql_list, $sql);
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L221-L225
+  $sql= << "EOS";
+SELECT
+  table_schema,
+  table_name,
+  column_name,
+  CONCAT("column's default character set: ", character_set_name)
+FROM 
+  information_schema.columns
+WHERE
+  character_set_name IN ('utf8', 'utf8mb3') AND
+  table_schema NOT IN ('sys', 'performance_schema', 'information_schema', 'mysql')
+EOS
+  push(@sql_list, $sql);
+
+  ### Trim extra space and LF
+  return map { s/\s+/ /g; return $_; } @sql_list;
+}
+
+sub _get_zerofill_check_sql
+{
+  my @sql_list;
+
+  my $sql;
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L273-L288
+  $sql= << "EOS";
+SELECT
+  table_schema,
+  table_name,
+  column_name,
+  column_type
+FROM
+  information_schema.columns
+WHERE
+  table_schema NOT IN ('sys', 'performance_schema', 'information_schema', 'mysql') AND
+  (
+    column_type REGEXP 'zerofill'
+    OR
+    (column_type LIKE 'tinyint%' AND
+     column_type NOT LIKE 'tinyint(4)%' AND
+     column_type NOT LIKE 'tinyint(3) unsigned%')
+    OR
+    (column_type LIKE 'smallint%' AND
+     column_type NOT LIKE 'smallint(6)%' AND
+     column_type NOT LIKE 'smallint(5) unsigned%')
+    OR
+    (column_type LIKE 'mediumint%' AND
+     column_type NOT LIKE 'mediumint(9)%' AND
+     column_type NOT LIKE 'mediumint(8) unsigned%')
+    OR
+    (column_type LIKE 'int%' AND
+     column_type NOT LIKE 'int(11)%' AND
+     column_type NOT LIKE 'int(10) unsigned%')
+    OR
+    (column_type LIKE 'bigint%' AND
+     column_type NOT LIKE 'bigint(20)%')
+  )
+EOS
+  push(@sql_list, $sql);
+
+  ### Trim extra space and LF
+  return map { s/\s+/ /g; return $_; } @sql_list;
+}
+
+sub _Check_table_command_sql
+{
+  my @sql_list;
+
+  ### Pickup all tables.
+  ###   https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L584-L586
+  my $sql= << "EOS";
+SELECT
+  table_schema,
+  table_name
+FROM
+  information_schema.tables
+WHERE
+  table_schema NOT IN ('information_schema', 'performance_schema')
+EOS
+
+  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L595-L596
+  foreach my $row (@{$conn->selectall_arrayref($sql, {Slice => {}})})
+  {
+    push(@sql_list, sprintf("CHECK TABLE `%s`.`%s`FOR UPGRADE", $row->{table_schema}, $row->{table_name}));
+  }
+
+  ### Trim extra space and LF
+  return map { s/\s+/ /g; return $_; } @sql_list;
+}
+
+sub run_with_sql_list
+{
+  my @sql_list= @_;
+
+  my $rc= 1;
+
+  foreach my $sql (@sql_list)
+  {
+    my $ret= $conn->selectall_arrayref($sql, {Slice => {}});
+    if ($ret->[0])
+    {
+      print_table($ret);
+      $rc= 0;
+    }
+  }
+  return $rc;
+}
+
+sub print_table
+{
+  ### $ret should be `selectall_arrayref($sql, {Slice => {}})`
+  my ($ret)= @_;
+  return 0 if !($ret && $ret->[0]);
+
+  my @columns= sort(keys(%{$ret->[0]}));
+
+  ### Evaluate width of resultset.
+  my %width= map { $_ => length($_) } @columns;
+  foreach my $row (@$ret)
+  {
+    foreach my $column (@columns)
+    {
+      my $length= length($row->{$column});
+      $length ||= 0;
+      $width{$column}= $length
+        if !($width{$column}) || ($width{$column} < $length);
+    }
+  }
+
+  ### print resultset.
+  printf("| %s |\n", join(" | ", map { my $format= sprintf("%%%ds", $width{$_}); sprintf($format, $_); } @columns));
+  printf("| %s |\n", join(" | ", map { sprintf("-" x $width{$_}); } @columns));
+
+  foreach my $row (@$ret)
+  {
+    printf("| %s |\n", join(" | ", map { my $format= sprintf("%%-%ds", $width{$_}); sprintf($format, $row->{$_}); } @columns));
+  }
+}
+
+sub get_version_string
+{
+  my $row= $conn->selectrow_hashref("SHOW VARIABLES LIKE 'version'");
+
+  $row->{Value} =~ /\A(?<major>\d)\.(?<minor>\d)\.(?<patch>\d+)(:?-.+)?\z/;
+  return sprintf("%d%02d%02d", $+{major}, $+{minor}, $+{patch});
+}
