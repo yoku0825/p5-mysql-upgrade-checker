@@ -379,7 +379,8 @@ FROM
 EOS
   push(@sql_list, $sql);
 
-  return @sql_list;
+  ### Trim extra space and LF
+  return map { s/\s+/ /g; return $_; } @sql_list;
 }
 
 
