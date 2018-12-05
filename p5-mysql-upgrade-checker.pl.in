@@ -43,8 +43,8 @@ my $option=
   user        => { alias => ["user", "u"], default => "root" },
   password    => { alias => ["password", "p"] },
   execute     => { default => 0, isa => "noarg" },
-  no_zerofill => { alias => ["skip-zerofill"], default => 0, isa => "noarg" },
-  no_utf8     => { alias => ["skip-utf8"], default => 0, isa => "noarg" },
+  no_zerofill => { alias => ["skip-zerofill", "no-zerofill"], default => 0, isa => "noarg" },
+  no_utf8     => { alias => ["skip-utf8", "no-utf8"], default => 0, isa => "noarg" },
 };
 
 my ($opt, @argv)= Ytkit::Config::options($option, @ARGV);
