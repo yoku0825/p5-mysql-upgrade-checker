@@ -14,6 +14,8 @@
 - `-S`, `--socket`   Specify socket for connection(effective only when host = localhost)
 - `-d`, `--database` Specify database for connection(This parameter doesn't affect script's behavior. Please leave it blank)
 - `--execute`        Add this option for executing query(default: only print SQL)
+- `--skip-zerofill`  Skip to check `get_zerofill_check`
+- `--skip-utf8`      Skip to check `get_utf8mb3_check`
 
 ## Example
 
