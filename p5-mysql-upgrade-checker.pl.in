@@ -36,13 +36,15 @@ use constant DST_VERSION => 80000;
 
 my $option=
 {
-  database => { alias => ["database", "d"], default => "" },
-  host     => { alias => ["host", "h"], default => "localhost" },
-  port     => { alias => ["port", "P"], default => 3306 },
-  socket   => { alias => ["socket", "S"], default => "" },
-  user     => { alias => ["user", "u"], default => "root" },
-  password => { alias => ["password", "p"] },
-  execute  => { default => 0, isa => "noarg" },
+  database    => { alias => ["database", "d"], default => "" },
+  host        => { alias => ["host", "h"], default => "localhost" },
+  port        => { alias => ["port", "P"], default => 3306 },
+  socket      => { alias => ["socket", "S"], default => "" },
+  user        => { alias => ["user", "u"], default => "root" },
+  password    => { alias => ["password", "p"] },
+  execute     => { default => 0, isa => "noarg" },
+  no_zerofill => { alias => ["skip-zerofill"], default => 0, isa => "noarg" },
+  no_utf8     => { alias => ["skip-utf8"], default => 0, isa => "noarg" },
 };
 
 my ($opt, @argv)= Ytkit::Config::options($option, @ARGV);
@@ -64,8 +66,9 @@ if ($opt->{execute})
   
   ok(get_reserved_keywords_check(),
      "Usage of db objects with names conflicting with reserved keywords in 8.0");
-  ok(get_utf8mb3_check(), "Usage of utf8mb3 charset");
-  ok(get_zerofill_check(), "Usage of use ZEROFILL/display length type attributes");
+
+  ok(get_utf8mb3_check(), "Usage of utf8mb3 charset") if !($opt->{no_utf8});
+  ok(get_zerofill_check(), "Usage of use ZEROFILL/display length type attributes") if !($opt->{no_zerofill});
   ok(Check_table_command(), "Issues reported by 'check table x for upgrade' command");
 
   ### MySQL 8.0 doesn't need to check name-conflicting.
