@@ -364,8 +364,11 @@ FROM
 EOS
   push(@sql_list, $sql);
 
-  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L466-L468
-  $sql= << "EOS";
+  ### Generated column has been implemented at 5.7
+  if ($src_version > 50700)
+  {
+    ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L466-L468
+    $sql= << "EOS";
 SELECT
   table_schema,
   table_name,
@@ -377,7 +380,8 @@ FROM
 WHERE
   extra REGEXP 'generated'
 EOS
-  push(@sql_list, $sql);
+    push(@sql_list, $sql);
+  }
 
   ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L469-L470
   $sql= << "EOS";
