@@ -643,7 +643,7 @@ FROM
   information_schema.columns
 WHERE
  table_schema NOT IN ('information_schema', 'performance_schema') AND
- column_type IN  $keywords
+ column_name IN  $keywords
 EOS
   push(@sql_list, $sql);
 
