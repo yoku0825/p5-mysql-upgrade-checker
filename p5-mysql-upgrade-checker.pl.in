@@ -800,7 +800,7 @@ SELECT
 FROM
   information_schema.tables
 WHERE
-  table_schema NOT IN ('information_schema', 'performance_schema')
+  table_schema NOT IN ('information_schema', 'performance_schema', 'sys')
 EOS
 
   ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L595-L596
