@@ -393,7 +393,7 @@ EOS
   push(@sql_list, $sql);
 
   ### Trim extra space and LF
-  return map { s/\s+/ /g; return $_; } @sql_list;
+  return map { s/\s+/ /g; $_; } @sql_list;
 }
 
 
@@ -418,7 +418,7 @@ EOS
   push(@sql_list, $sql);
 
   ### Trim extra space and LF
-  return map { s/\s+/ /g; return $_; } @sql_list;
+  return map { s/\s+/ /g; $_; } @sql_list;
 }
 
 sub _get_obsolete_sql_mode_flags_check_sql
@@ -473,7 +473,7 @@ EOS
   }
 
   ### Trim extra space and LF
-  return map { s/\s+/ /g; return $_; } @sql_list;
+  return map { s/\s+/ /g; $_; } @sql_list;
 }
 
 sub _get_maxdb_sql_mode_flags_check_sql
@@ -521,7 +521,7 @@ EOS
   push(@sql_list, $sql);
 
   ### Trim extra space and LF
-  return map { s/\s+/ /g; return $_; } @sql_list;
+  return map { s/\s+/ /g; $_; } @sql_list;
 }
 
 sub _get_foreign_key_length_check_sql
@@ -558,7 +558,7 @@ EOS
   push(@sql_list, $sql);
 
   ### Trim extra space and LF
-  return map { s/\s+/ /g; return $_; } @sql_list;
+  return map { s/\s+/ /g; $_; } @sql_list;
 }
 
 sub __get_foreign_key_length_check_sql_55
@@ -597,7 +597,7 @@ EOS
   push(@sql_list, $sql);
 
   ### Trim extra space and LF
-  return map { s/\s+/ /g; return $_; } @sql_list;
+  return map { s/\s+/ /g; $_; } @sql_list;
 }
 
 
@@ -630,7 +630,7 @@ EOS
   push(@sql_list, $sql);
 
   ### Trim extra space and LF
-  return map { s/\s+/ /g; return $_; } @sql_list;
+  return map { s/\s+/ /g; $_; } @sql_list;
 }
 
 sub _get_reserved_keywords_check_sql
@@ -742,7 +742,7 @@ EOS
   push(@sql_list, $sql);
 
   ### Trim extra space and LF
-  return map { s/\s+/ /g; return $_; } @sql_list;
+  return map { s/\s+/ /g; $_; } @sql_list;
 }
 
 sub _get_utf8mb3_check_sql
@@ -780,7 +780,7 @@ EOS
   push(@sql_list, $sql);
 
   ### Trim extra space and LF
-  return map { s/\s+/ /g; return $_; } @sql_list;
+  return map { s/\s+/ /g; $_; } @sql_list;
 }
 
 sub _get_zerofill_check_sql
@@ -826,7 +826,7 @@ EOS
   push(@sql_list, $sql);
 
   ### Trim extra space and LF
-  return map { s/\s+/ /g; return $_; } @sql_list;
+  return map { s/\s+/ /g; $_; } @sql_list;
 }
 
 sub _Check_table_command_sql
@@ -852,7 +852,7 @@ EOS
   }
 
   ### Trim extra space and LF
-  return map { s/\s+/ /g; return $_; } @sql_list;
+  return map { s/\s+/ /g; $_; } @sql_list;
 }
 
 sub run_with_sql_list
