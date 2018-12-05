@@ -6,7 +6,7 @@ BEGIN {
 my %fatpacked;
 
 $fatpacked{"Ytkit/Config.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'YTKIT_CONFIG';
-  package Ytkit::Config;use strict;use warnings;use utf8;use Exporter qw{import};our@EXPORT=qw{options load_config version};our$VERSION='0.0.18';our$CONNECT_OPTION={user=>{alias=>["u","user"]},host=>{alias=>["h","host"]},port=>{alias=>["P","port"]},socket=>{alias=>["S","socket"]},password=>{alias=>["p","password"]},timeout=>{alias=>["timeout"],default=>1 },};our$COMMON_OPTION={help=>{alias=>["help","usage"]},version=>{alias=>["version","V"],default=>0 },config_file=>{alias=>["c","config-file"]},};sub options {my ($option_struct,@argv)=@_;my ($ret,@left_argv);for my$parent (keys(%$option_struct)){next unless ref($option_struct->{$parent})eq "HASH";for my$child (keys(%{$option_struct->{$parent}})){if (ref($option_struct->{$parent}->{$child})eq "HASH"){my$new_option=sprintf("%s_%s",$parent,$child);$option_struct->{$new_option}=$option_struct->{$parent}->{$child};delete($option_struct->{$parent}->{$child});delete($option_struct->{$parent})unless %{$option_struct->{$parent}}}}}my$alias_dict;for my$opt (keys(%$option_struct)){if (ref($option_struct->{$opt})eq "ARRAY"){my$save=$option_struct->{$opt};delete($option_struct->{$opt});$option_struct->{$opt}->{alias}=$save}$option_struct->{$opt}->{alias}||= [$opt];for (@{$option_struct->{$opt}->{alias}}){s/-/_/g;$alias_dict->{$_}=$opt;$ret->{$opt}=$option_struct->{$opt}->{default}if exists($option_struct->{$opt}->{default})}}while(@argv){last unless defined($argv[0]);my ($key,$value);my$arg=shift(@argv);if ($arg =~ /^--([^=]+)=(.*)$/){($key,$value)=($1,$2)}elsif ($arg =~ /^--([^\s]+)$/){$key=$1;my$next=shift(@argv);if (!($next)|| $next =~ /^-/){$value=1;unshift(@argv,$next)}else {$value=$next}}elsif ($arg =~ /^-([^=-])=(.*)$/){($key,$value)=($1,$2)}elsif ($arg =~ /^-([^-])$/){$key=$1;my$next=shift(@argv);if (!($next)|| $next =~ /^-/){$value=1;unshift(@argv,$next)}else {$value=$next}}elsif ($arg =~ /^-([^-])(.+)$/){($key,$value)=($1,$2)}$key =~ s/-/_/g if$key;if ($key && $alias_dict->{$key}){if ($value =~ /^"([^"]*)/){while (!($value =~ /"$/)){$value .= " " .shift(@argv)}$value =~ s/^"([^"]*)"$/$1/}elsif ($value =~ /^'([^']*)/){while (!($value =~ /'$/)){$value .= " " .shift(@argv)}$value =~ s/^'([^']*)'$/$1/}if (my$isa=$option_struct->{$alias_dict->{$key}}->{isa}){if (ref($isa)eq "ARRAY"){$ret->{$alias_dict->{$key}}=((grep {$value eq $_}@$isa)? $value : undef)}elsif (ref($isa)eq "Regexp"){$ret->{$alias_dict->{$key}}=(($value =~ $isa)? $value : undef)}elsif ($isa eq "noarg" || $isa eq "NOARG"){$ret->{$alias_dict->{$key}}=1;unshift(@argv,$value)}elsif ($isa eq "multi" || $isa eq "MULTI" || $isa eq "multiple" || $isa eq "MULTIPLE"){push(@{$ret->{$alias_dict->{$key}}},$value)}else {$ret->{$alias_dict->{$key}}=undef}}else {$ret->{$alias_dict->{$key}}=$value}}else {push(@left_argv,$arg)}($key,$value)=()}return$ret,@left_argv}sub load_config {my ($opt,$config_file,$config_section)=@_;return$opt unless -r $config_file;open(my$fh,"<",$config_file);my$current_section="";while (my$line=<$fh>){chomp($line);if ($line =~/^\s*$/){next}elsif ($line =~ /^\s*#/){next}elsif ($line =~ /^\[([^\[\]]+)\]$/){$current_section=$1;next}next if$current_section ne $config_section;if ($line =~/^([^\s=]+)\s*=\s*(.*)$/){my ($key,$value)=($1,$2);$value =~ s/^"([^"]*)"$/$1/;$value =~ s/^'([^']*)'$/$1/;$opt->{$key}||= $value}else {$opt->{$line}||= 1}}close($fh);return$opt}sub version {return$VERSION}return 1;
+  package Ytkit::Config;use strict;use warnings;use utf8;use Exporter qw{import};our@EXPORT=qw{options load_config version};our$VERSION='0.0.18';our$CONNECT_OPTION={user=>{alias=>["u","user"]},host=>{alias=>["h","host"]},port=>{alias=>["P","port"]},socket=>{alias=>["S","socket"]},password=>{alias=>["p","password"]},timeout=>{alias=>["timeout"],default=>1 },};our$COMMON_OPTION={help=>{alias=>["help","usage"]},verbose=>{alias=>["verbose","v"]},version=>{alias=>["version","V"],default=>0 },config_file=>{alias=>["c","config-file"]},};sub options {my ($option_struct,@argv)=@_;my ($ret,@left_argv);$ret->{orig_argv}=[@argv];my$alias_dict;while (my ($parent_key,$child)=each(%$option_struct)){next if!(ref($child)eq "HASH");while (my ($child_key,$child_value)=each(%$child)){my$new_option=sprintf("%s_%s",$parent_key,$child_key);$alias_dict->{$new_option}=join("::",$parent_key,$child_key)}}for my$opt (keys(%$option_struct)){if (ref($option_struct->{$opt})eq "ARRAY"){my$save=$option_struct->{$opt};delete($option_struct->{$opt});$option_struct->{$opt}->{alias}=$save}$option_struct->{$opt}->{alias}||= [$opt];for (@{$option_struct->{$opt}->{alias}}){s/-/_/g;$alias_dict->{$_}=$opt;$ret->{$opt}=$option_struct->{$opt}->{default}if exists($option_struct->{$opt}->{default})}}while(@argv){last unless defined($argv[0]);my ($key,$value);my$arg=shift(@argv);if ($arg =~ /^--([^=]+)=(.*)$/){($key,$value)=($1,$2)}elsif ($arg =~ /^--([^\s]+)$/){$key=$1;my$next=shift(@argv);if (!($next)|| $next =~ /^-/){$value=1;unshift(@argv,$next)}else {$value=$next}}elsif ($arg =~ /^-([^=-])=(.*)$/){($key,$value)=($1,$2)}elsif ($arg =~ /^-([^-])$/){$key=$1;my$next=shift(@argv);if (!($next)|| $next =~ /^-/){$value=1;unshift(@argv,$next)}else {$value=$next}}elsif ($arg =~ /^-([^-])(.+)$/){($key,$value)=($1,$2)}$key =~ s/-/_/g if$key;if ($key && $alias_dict->{$key}){if ($value =~ /^"([^"]*)/){while (!($value =~ /"$/)){$value .= " " .shift(@argv)}$value =~ s/^"([^"]*)"$/$1/}elsif ($value =~ /^'([^']*)/){while (!($value =~ /'$/)){$value .= " " .shift(@argv)}$value =~ s/^'([^']*)'$/$1/}if (my$isa=$option_struct->{$alias_dict->{$key}}->{isa}){if (ref($isa)eq "ARRAY"){$ret->{$alias_dict->{$key}}=((grep {$value eq $_}@$isa)? $value : undef)}elsif (ref($isa)eq "Regexp"){$ret->{$alias_dict->{$key}}=(($value =~ $isa)? $value : undef)}elsif ($isa eq "noarg" || $isa eq "NOARG"){$ret->{$alias_dict->{$key}}=1;unshift(@argv,$value)}elsif ($isa eq "multi" || $isa eq "MULTI" || $isa eq "multiple" || $isa eq "MULTIPLE"){push(@{$ret->{$alias_dict->{$key}}},$value)}else {$ret->{$alias_dict->{$key}}=undef}}else {$ret->{$alias_dict->{$key}}=$value}}else {push(@left_argv,$arg)}($key,$value)=()}$ret->{left_argv}=[@left_argv];return$ret,@left_argv}sub load_config {my ($opt,$config_file,$config_section)=@_;return$opt unless -r $config_file;open(my$fh,"<",$config_file);my$current_section="";while (my$line=<$fh>){chomp($line);if ($line =~/^\s*$/){next}elsif ($line =~ /^\s*#/){next}elsif ($line =~ /^\[([^\[\]]+)\]$/){$current_section=$1;next}next if$current_section ne $config_section;if ($line =~/^([^\s=]+)\s*=\s*(.*)$/){my ($key,$value)=($1,$2);$value =~ s/^"([^"]*)"$/$1/;$value =~ s/^'([^']*)'$/$1/;$opt->{$key}||= $value}else {$opt->{$line}||= 1}}close($fh);return$opt}sub version {return$VERSION}return 1;
 YTKIT_CONFIG
 
 s/^  //mg for values %fatpacked;
@@ -100,20 +100,33 @@ $dsn .= sprintf(";port=%d", $opt->{port}) if $opt->{port};
 $dsn .= sprintf(";mysql_socket=%s", $opt->{socket}) if $opt->{socket};
 my $conn= DBI->connect($dsn, $opt->{user}, $opt->{password},
                        {PrintError => 1, RaiseError => 1, mysql_use_utf8 => 1}) or die;
+my $src_version= get_version_number();
+my $is_supported= ($src_version > 50700 && $src_version < 80000);
  
 if ($opt->{execute})
 {
-  my $src_version= get_version_string();
-  return "5.7 to 8.0 only"
-    if $src_version < 50700 || $src_version >= 80000 || DST_VERSION < 80000 || DST_VERSION >= 80100;
+  ### Warn if 5.6 and ealier, 8.0 and later.
+  warn("Version $src_version detected. Some tests depending on 5.7 features will be skipped") if !($is_supported);
   
   ok(get_reserved_keywords_check(),
      "Usage of db objects with names conflicting with reserved keywords in 8.0");
   ok(get_utf8mb3_check(), "Usage of utf8mb3 charset");
   ok(get_zerofill_check(), "Usage of use ZEROFILL/display length type attributes");
   ok(Check_table_command(), "Issues reported by 'check table x for upgrade' command");
-  ok(get_mysql_schema_check(), "Table names in the mysql schema conflicting with new tables in 8.0");
-  ok(get_old_temporal_check(), "Usage of old temporal type");
+
+  ### MySQL 8.0 doesn't need to check name-conflicting.
+  ok(get_mysql_schema_check(), "Table names in the mysql schema conflicting with new tables in 8.0")
+    if ($src_version < 80000);
+
+  ### This is only 5.7 feature.
+  if ($is_supported)
+  {
+    ok(get_old_temporal_check(), "Usage of old temporal type");
+  }
+  else
+  {
+    warn("'Usage of old temporal type' check is only available 5.7 series.");
+  }
   ok(get_foreign_key_length_check(), "Foreign key constraint names longer than 64 characters");
   ok(get_maxdb_sql_mode_flags_check(), "usage of obsolete MAXDB sql_mode flag");
   ok(get_obsolete_sql_mode_flags_check(), "get_obsolete_sql_mode_flags_check");
@@ -516,8 +529,13 @@ sub _get_foreign_key_length_check_sql
   my @sql_list;
   my $sql;
 
-  ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L299-L304
-  $sql= << "EOS";
+  if ($src_version > 50700)
+  {
+    ### innodb_sys_foreign renamed innodb_foreign at 8.0
+    my $table_name= $is_supported ? "innodb_sys_foreign" : "innodb_foreign";
+
+    ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L299-L304
+    $sql= << "EOS";
 SELECT
   table_schema,
   table_name,
@@ -527,14 +545,37 @@ FROM
 WHERE
   table_name IN (SELECT LEFT(SUBSTR(id, INSTR(id, '/') + 1),
                              INSTR(SUBSTR(id, INSTR(id, '/') + 1), '_ibfk_') -1 )
-                 FROM information_schema.innodb_sys_foreign
+                 FROM information_schema.$table_name
                  WHERE LENGTH(SUBSTR(id, INSTR(id, '/') + 1)) > 64)
 EOS
+  }
+  else
+  {
+    ### For 5.5
+    $sql= __get_foreign_key_length_check_sql_55();
+  }
+
   push(@sql_list, $sql);
 
   ### Trim extra space and LF
   return map { s/\s+/ /g; return $_; } @sql_list;
 }
+
+sub __get_foreign_key_length_check_sql_55
+{
+  return << "EOS";
+SELECT
+  constraint_schema AS table_schema,
+  table_name,
+  'Foreign key longer than 64 characters' AS description
+FROM
+  information_schema.referential_constraints
+WHERE
+  LENGTH(constraint_name) > 64
+EOS
+}
+
+
 
 sub _get_old_temporal_check_sql
 {
@@ -796,8 +837,8 @@ sub _Check_table_command_sql
   ###   https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L584-L586
   my $sql= << "EOS";
 SELECT
-  table_schema,
-  table_name
+  table_schema AS table_schema,
+  table_name AS table_name
 FROM
   information_schema.tables
 WHERE
@@ -807,7 +848,7 @@ EOS
   ### https://github.com/mysql/mysql-shell/blob/8.0.11/modules/util/upgrade_check.cc#L595-L596
   foreach my $row (@{$conn->selectall_arrayref($sql, {Slice => {}})})
   {
-    push(@sql_list, sprintf("CHECK TABLE `%s`.`%s`FOR UPGRADE", $row->{table_schema}, $row->{table_name}));
+    push(@sql_list, sprintf("CHECK TABLE `%s`.`%s` FOR UPGRADE", $row->{table_schema}, $row->{table_name}));
   }
 
   ### Trim extra space and LF
@@ -863,7 +904,7 @@ sub print_table
   }
 }
 
-sub get_version_string
+sub get_version_number
 {
   my $row= $conn->selectrow_hashref("SHOW VARIABLES LIKE 'version'");
 
